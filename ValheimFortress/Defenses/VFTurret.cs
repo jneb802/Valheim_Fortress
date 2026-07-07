@@ -217,6 +217,9 @@ namespace ValheimFortress.Defenses
 			{
 				// Refresh the in-range target list once and reuse it for both the rescan cadence and target
 				// selection, rather than separately scanning the entire character list via GetAllCharacters.
+				// GetCharactersInRange appends to the list, so clear it first: otherwise it grows unbounded and
+				// retains characters that have since died/been destroyed, whose transform throws in the sort below.
+				nearby_targets.Clear();
 				Character.GetCharactersInRange(base.transform.position, m_viewDistance, nearby_targets);
 				// Order targets nearest-first so selection prefers the closest hittable enemy (squared distance
 				// avoids the sqrt in Vector3.Distance; sort in place to avoid a LINQ allocation).

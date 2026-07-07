@@ -1,4 +1,11 @@
 
+  **0.35.1**
+---
+```
+- Fixes Automated turrets failing to update their after extended periods of time
+```
+
+
   **0.35.0**
 ---
 ```
