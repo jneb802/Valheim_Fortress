@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Text;
 using UnityEngine;
@@ -55,7 +56,9 @@ namespace ValheimFortress
             if (RunChallengeMethod == null || definition == null) { return false; }
             string json = Serialize(definition);
             if (json == null) { return false; }
-            return (bool)RunChallengeMethod.Invoke(null, new object[] { json, spawnPoints, rewardLocation });
+            // Guard the unbox: if the reflected call ever returns null/non-bool (e.g. a boundary hiccup),
+            // treat it as failure rather than throwing an InvalidCastException back into the caller's mod.
+            return RunChallengeMethod.Invoke(null, new object[] { json, spawnPoints, rewardLocation }) is bool ok && ok;
         }
 
         /// <summary>Convenience overload accepting a <see cref="List{T}"/> of spawn points.</summary>
@@ -88,13 +91,20 @@ namespace ValheimFortress
             return (List<string>)GetWaveStylesMethod.Invoke(null, null);
         }
 
+        // Serializer settings MUST stay in lockstep with APIReceiver.Deserialize on the Valheim Fortress
+        // side, since the JSON produced here is the only thing that crosses the soft-dependency boundary.
+        // UseSimpleDictionaryFormat writes the reward/override maps as plain JSON objects ({"Coins":5})
+        // rather than key/value-pair arrays.
+        private static readonly DataContractJsonSerializerSettings SerializerSettings =
+            new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true };
+
         private static string Serialize(VFChallengeDefinition definition)
         {
             try
             {
                 using (MemoryStream ms = new MemoryStream())
                 {
-                    DataContractJsonSerializer serializer = new DataContractJsonSerializer(typeof(VFChallengeDefinition));
+                    DataContractJsonSerializer serializer = new DataContractJsonSerializer(typeof(VFChallengeDefinition), SerializerSettings);
                     serializer.WriteObject(ms, definition);
                     return Encoding.UTF8.GetString(ms.ToArray());
                 }
@@ -118,40 +128,61 @@ namespace ValheimFortress
     /// </list>
     /// Rewards can be auto-scaled, fixed, or both.
     /// </summary>
+    [DataContract]
     public class VFChallengeDefinition
     {
+        /// <summary>The wire schema version this copy of the API produces. Bumped when the serialized shape
+        /// changes so a Valheim Fortress install can detect a caller whose copied <c>API.cs</c> is out of
+        /// date. Callers do not set this.</summary>
+        public const int CurrentSchemaVersion = 1;
+
+        /// <summary>Schema marker stamped automatically on serialization (see <see cref="CurrentSchemaVersion"/>).
+        /// Always emitted; the receiver warns when it does not match the installed version. Do not set this yourself.</summary>
+        [DataMember]
+        public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+
         // ---- Tuned / generated mode (used when ExplicitPhases is null/empty) ----
 
         /// <summary>Biome whose creatures the wave is generated from. Supported: Meadows, BlackForest,
         /// Swamp, Mountain, Plains, Mistlands, AshLands.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public Heightmap.Biome Biome { get; set; } = Heightmap.Biome.Meadows;
 
         /// <summary>Difficulty/level index. Higher means more wave points and larger rewards.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public short Difficulty { get; set; } = 1;
 
         /// <summary>Wave-style name controlling the common/rare/elite mix (see <see cref="API.GetWaveStyles"/>).
         /// Defaults to "Normal" if empty or unrecognized.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public string WaveStyle { get; set; } = "Normal";
 
         /// <summary>Number of wave phases to generate. Defaults to 4 when left at 0.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public short NumPhases { get; set; } = 4;
 
         /// <summary>Optional cap on creatures generated per phase. 0 uses the Fortress default cap.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public short MaxCreaturesPerPhase { get; set; } = 0;
 
         /// <summary>Optional whitelist of creature names; when set, only these creatures are generated.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public List<string> OnlySelectMonsters { get; set; }
 
         /// <summary>Optional blacklist of creature names to exclude from generation.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public List<string> ExcludeSelectMonsters { get; set; }
 
         /// <summary>Increases wave points and rewards.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public bool HardMode { get; set; } = false;
 
         /// <summary>Uses the boss wave style and applies the boss reward multiplier.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public bool BossMode { get; set; } = false;
 
         /// <summary>Doubles the number of phases and applies the siege reward multiplier.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public bool SiegeMode { get; set; } = false;
 
         // ---- Creature behavior ----
@@ -160,46 +191,55 @@ namespace ValheimFortress
         /// to false, so (like the physical shrines) challenge creatures drop nothing and players are rewarded
         /// only via the configured challenge rewards. Can be overridden per creature via
         /// <see cref="CreatureDropOverrides"/>.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public bool EnableCreatureDrops { get; set; } = false;
 
         /// <summary>Optional per-creature loot-drop overrides, keyed by creature name (see
         /// <see cref="API.GetSpawnableCreatures"/>). A creature listed here uses its mapped value instead of
         /// <see cref="EnableCreatureDrops"/> (true = drops, false = no drops); creatures not listed fall back
         /// to the global value. Unknown creature names are ignored.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public Dictionary<string, bool> CreatureDropOverrides { get; set; }
 
         // ---- Explicit mode (overrides the tuned fields when set) ----
 
         /// <summary>Explicit per-phase creature lists. Each inner list is one phase. When non-empty this
         /// overrides the tuned/generated fields above.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public List<List<VFHoardEntry>> ExplicitPhases { get; set; }
 
         // ---- Rewards (either, both, or neither) ----
 
         /// <summary>Auto-scaled rewards. Keys are item prefab names, values are the per-unit point cost;
         /// the spawned amount scales with difficulty, modes and nearby-player count.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public Dictionary<string, short> ScaledRewards { get; set; }
 
         /// <summary>Fixed rewards. Keys are item prefab names, values are the exact counts to spawn.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public Dictionary<string, short> FixedRewards { get; set; }
 
         // ---- Messaging (optional) ----
 
         /// <summary>Optional message shown to nearby players when the challenge begins (supports $localization keys).</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public string WaveStartMessage { get; set; }
 
         /// <summary>Optional message shown to nearby players when the challenge completes (supports $localization keys).</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public string WaveEndMessage { get; set; }
 
         /// <summary>Optional phrases shown to nearby players during each between-wave pause. Each entry supports
         /// a $localization key or literal text. When non-empty this replaces the built-in phrase pool for this
         /// run; when null/empty the built-in pool is used. Selection order is controlled by
         /// <see cref="OrderedPhrases"/>.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public List<string> BetweenWavePhrases { get; set; }
 
         /// <summary>Controls how <see cref="BetweenWavePhrases"/> are selected. When true, phrases play in list
         /// order (wrapping when there are more pauses than phrases); when false (default), a phrase is picked at
         /// random each pause.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public bool OrderedPhrases { get; set; } = false;
 
         // ---- Presentation (optional) ----
@@ -210,19 +250,24 @@ namespace ValheimFortress
         /// markers are client-local and cosmetic: they only render for the instance that drives the run (the
         /// caller in single-player or on a P2P host), and are skipped on a headless dedicated server. Defaults
         /// to false.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public bool DrawMapOverlay { get; set; } = false;
     }
 
     /// <summary>A single creature entry in an explicit wave phase.</summary>
+    [DataContract]
     public class VFHoardEntry
     {
         /// <summary>The creature name (one of <see cref="API.GetSpawnableCreatures"/>).</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public string Creature { get; set; }
 
         /// <summary>How many of this creature to spawn in the phase.</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public short Amount { get; set; }
 
         /// <summary>Star level (0 = no stars).</summary>
+        [DataMember(EmitDefaultValue = false, IsRequired = false)]
         public short Stars { get; set; }
     }
 }

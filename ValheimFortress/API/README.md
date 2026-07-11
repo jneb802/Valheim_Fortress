@@ -15,6 +15,13 @@ plugin class:
 
 All calls go through reflection, so you never need a hard reference to the Valheim Fortress assembly.
 
+> **Keep `API.cs` up to date.** The challenge definition is serialized and crosses the soft-dependency
+> boundary as JSON, so your copy of `API.cs` and the installed Valheim Fortress must agree on the format.
+> The contract is version-tolerant (missing/extra fields are handled) and stamped with a schema version:
+> if they drift too far, Valheim Fortress logs a clear warning telling you to re-copy `API.cs`. Re-copy
+> `API.cs` from the release you build against. **Note:** the 0.36.0 release changed the wire format
+> (simplified reward maps + schema version); re-copy `API.cs` when updating to 0.36.0 or later.
+
 ### Required references
 
 `API.cs` uses the framework assembly `System.Runtime.Serialization` (to serialize the definition

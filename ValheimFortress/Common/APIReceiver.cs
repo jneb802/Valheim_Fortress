@@ -202,6 +202,12 @@ namespace ValheimFortress
             return result;
         }
 
+        // Must stay in lockstep with API.Serialize on the caller side (the copied API.cs); the JSON string
+        // is the only thing that crosses the soft-dependency boundary, so both sides must agree on the format.
+        // UseSimpleDictionaryFormat reads the reward/override maps as plain JSON objects ({"Coins":5}).
+        private static readonly DataContractJsonSerializerSettings SerializerSettings =
+            new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true };
+
         private static VFChallengeDefinition Deserialize(string json)
         {
             if (string.IsNullOrEmpty(json)) { return null; }
@@ -209,13 +215,28 @@ namespace ValheimFortress
             {
                 using (MemoryStream ms = new MemoryStream(Encoding.UTF8.GetBytes(json)))
                 {
-                    DataContractJsonSerializer serializer = new DataContractJsonSerializer(typeof(VFChallengeDefinition));
-                    return (VFChallengeDefinition)serializer.ReadObject(ms);
+                    DataContractJsonSerializer serializer = new DataContractJsonSerializer(typeof(VFChallengeDefinition), SerializerSettings);
+                    // Safe cast: an unexpected result yields null (handled by the caller) instead of an
+                    // InvalidCastException escaping the deserializer.
+                    VFChallengeDefinition def = serializer.ReadObject(ms) as VFChallengeDefinition;
+                    if (def == null)
+                    {
+                        Jotunn.Logger.LogError("VF-API: challenge definition deserialized to null / an unexpected type.");
+                        return null;
+                    }
+                    if (def.SchemaVersion != VFChallengeDefinition.CurrentSchemaVersion)
+                    {
+                        Jotunn.Logger.LogWarning($"VF-API: challenge definition schema version mismatch (received {def.SchemaVersion}, expected {VFChallengeDefinition.CurrentSchemaVersion}). " +
+                            "The calling mod's copy of API.cs is out of sync with this Valheim Fortress version; re-copy API.cs from the current release. Attempting to continue.");
+                    }
+                    return def;
                 }
             }
             catch (Exception ex)
             {
-                Jotunn.Logger.LogError($"VF-API: failed to deserialize challenge definition: {ex.Message}");
+                // Log the full exception chain (ToString includes type, stack, and inner exceptions) so the
+                // real DataContractJsonSerializer cause is captured rather than just the outer message.
+                Jotunn.Logger.LogError($"VF-API: failed to deserialize challenge definition: {ex}");
                 return null;
             }
         }

@@ -1,4 +1,12 @@
 
+  **0.36.0**
+---
+```
+- API: hardened the challenge-definition boundary against deserialization/invalid-cast failures
+- API (breaking wire change): the serialized format was simplified (reward/override maps are now plain JSON objects) and a schema version was added. Consumers must re-copy API.cs from this release.
+```
+
+
   **0.35.1**
 ---
 ```
