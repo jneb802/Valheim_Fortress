@@ -1,4 +1,10 @@
 
+  **0.36.1**
+---
+```
+- Updates required Bepinex and Jotunn versions
+```
+
   **0.36.0**
 ---
 ```
