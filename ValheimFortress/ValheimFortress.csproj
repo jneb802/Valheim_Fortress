@@ -158,7 +158,6 @@
   <PropertyGroup>
     <BuildDependsOn>
       $(BuildDependsOn);
-      JotunnPostBuildTaskWin
     </BuildDependsOn>
   </PropertyGroup>
   <PropertyGroup>
