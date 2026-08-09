@@ -11,7 +11,6 @@ namespace ValheimFortress.Challenge
     {
         private static int log_slower = 0;
         private WildShrineConfiguration wildShrineConfiguration;
-        private static new GameObject shrine_spawnpoint;
         public override void Awake()
         {}
 
@@ -34,15 +33,21 @@ namespace ValheimFortress.Challenge
             wave_definition_ready = new BoolZNetProperty("wave_definition_ready", zNetView, false);
             spawn_locations_ready = new BoolZNetProperty("spawn_locations_ready", zNetView, false);
             force_next_phase = new BoolZNetProperty("force_next_phase", zNetView, false);
-            remote_spawn_locations = new ArrayVectorZNetProperty("remote_spawn_locations", zNetView, null);
+            phase_spawned_total = new IntZNetProperty("phase_spawned_total", zNetView, 0);
+            phase_spawn_in_flight = new BoolZNetProperty("phase_spawn_in_flight", zNetView, false);
+            challenge_progress_time = new IntZNetProperty("challenge_progress_time", zNetView, 0);
+            remote_spawn_locations = new ArrayVectorZNetProperty("remote_spawn_locations", zNetView, new Vector3[0]);
             if (VFConfig.EnableDebugMode.Value) { Jotunn.Logger.LogInfo("Created shrine znet values."); }
 
             Dictionary<String, short> default_creature_dictionary = new Dictionary<String, short>() { };
             alive_creature_list = new DictionaryZNetProperty("alive_creature_list", zNetView, default_creature_dictionary);
             spawned_creature_records = new SpawnedCreatureRecordsZNetProperty("spawned_creature_records", zNetView, new List<SpawnedCreatureRecord>());
 
-            WaveDefinitionRPC = NetworkManager.Instance.AddRPC("levelsyaml_rpc", VFConfig.OnServerRecieveConfigs, OnClientReceivePhaseConfigs);
-            SynchronizationManager.Instance.AddInitialSynchronization(WaveDefinitionRPC, SendPhaseConfigs);
+            // Must match the name the other shrines use. This previously registered "levelsyaml_rpc", which
+            // is VFConfig's challenge-level config channel, so wave definitions were fed to the level-config
+            // parser and never reached other clients. Initial synchronization is deliberately not registered
+            // here either -- see the note in GenericShrine.Awake.
+            WaveDefinitionRPC = NetworkManager.Instance.AddRPC("VF_levelsyaml_rpc", VFConfig.OnServerRecieveConfigs, OnClientReceivePhaseConfigs);
 
             if (VFConfig.EnableDebugMode.Value) { Jotunn.Logger.LogInfo("Added shrine custom RPC."); }
         }
@@ -123,7 +128,7 @@ namespace ValheimFortress.Challenge
             // Must be before portals are placed
             challenge_active.Set(true);
             // Should be before the phase starts
-            phase_running = true;
+            BeginPhaseSpawn();
             RemoteLocationPortals.DrawMapOverlayAndPortals(remote_spawn_locations.Get(), gameObject.GetComponent<WildShrine>(), VFConfig.EnableShrineMapOverlay.Value);
             spawn_controller.TrySpawningPhase(5f, false, wave_phases_definitions.hordePhases[currentPhase.Get()], gameObject, remote_spawn_locations.Get());
             SetCurrentCreatureList(wave_phases_definitions.hordePhases[currentPhase.Get()]);
@@ -159,12 +164,16 @@ namespace ValheimFortress.Challenge
                 wildShrineConfiguration = WildShrineData.GetWildShrineConfigurationForSpecificShrine(shrine_name);
             }
 
-            // reconnect componets if they go missing
-            if (spawn_controller == null || shrine_spawnpoint == null)
+            // reconnect componets if they go missing. Awake is intentionally empty for these shrines (the
+            // location's ZNetView does not exist yet), so this is also where the base class references get
+            // populated. These are per-instance fields: a wild shrine must only ever resolve its own
+            // spawnpoint, or rewards end up at a different shrine entirely.
+            if (spawn_controller == null || shrine_spawnpoint == null || shrine_portal == null)
             {
                 if (VFConfig.EnableDebugMode.Value) { Jotunn.Logger.LogInfo("Missing required references for shrine, reconnecting."); }
-                spawn_controller = this.gameObject.GetComponent<Spawner>();
-                shrine_spawnpoint = this.transform.FindDeepChild("spawnpoint").gameObject;
+                if (spawn_controller == null) { spawn_controller = this.gameObject.GetComponent<Spawner>(); }
+                if (shrine_spawnpoint == null) { shrine_spawnpoint = this.transform.FindDeepChild("spawnpoint").gameObject; }
+                if (shrine_portal == null) { shrine_portal = gameObject.transform.Find("portal").gameObject; }
             }
             //if (VFConfig.EnableDebugMode.Value) { Jotunn.Logger.LogInfo("Componets available."); }
 
@@ -180,6 +189,7 @@ namespace ValheimFortress.Challenge
             //if (VFConfig.EnableDebugMode.Value) { Jotunn.Logger.LogInfo("Checked portal status."); }
 
             // Everything past here should only be run once, by whatever main thread is controlling the ticks in this region.
+            NoteOwnershipState(zNetView.IsOwner());
             if (!zNetView.IsOwner())
             {
                 return;
@@ -197,19 +207,23 @@ namespace ValheimFortress.Challenge
                     WildShrineLevelConfiguration wLevelDefinition = wildShrineConfiguration.wildShrineLevelsConfig.ElementAt(selected_level.Get());
                     wave_phases_definitions = Levels.generateRandomWaveWithOptions(wLevelDefinition.wildLevelDefinition.ToChallengeLevelDefinition(), hard_mode.Get(), false, siege_mode.Get(), wLevelDefinition.wildLevelDefinition.maxCreaturesPerPhaseOverride);
                     wave_definition_ready.Set(true);
-                    selected_reward.Set(wLevelDefinition.rewards.Values.ToString());
+                    selected_reward.Set(string.Join(", ", wLevelDefinition.rewards.Keys));
                     StartCoroutine(RemoteLocationPortals.DetermineRemoteSpawnLocations(gameObject, gameObject.GetComponent<WildShrine>()));
                 }
 
                 // We can only actually start the challenge when all of the data objects are ready
                 if (wave_definition_ready.Get() == true && spawn_locations_ready.Get() == true)
                 {
-                    if (wave_phases_definitions == null || remote_spawn_locations == null)
+                    Vector3[] spawn_points = remote_spawn_locations.Get();
+                    if (wave_phases_definitions == null || spawn_points == null || spawn_points.Length == 0)
                     {
-                        // we got here but arn't ready yet, DO IT AGAIN
+                        // we got here but arn't ready yet, DO IT AGAIN. Returning matters: falling through
+                        // would start the challenge (setting challenge_active) against a null wave and throw,
+                        // leaving the shrine permanently active and unable to pay out.
                         wave_definition_ready.Set(false);
                         spawn_locations_ready.Set(false);
                         if (VFConfig.EnableDebugMode.Value) { Jotunn.Logger.LogInfo("Challenge tried to start but did not have the data objects required to do so, attempting regeneration."); }
+                        return;
                     }
                     if (VFConfig.EnableDebugMode.Value) { Jotunn.Logger.LogInfo("Starting challenge and sending phase configs to others."); }
                     SendUpdatedPhaseConfigs();
@@ -228,11 +242,22 @@ namespace ValheimFortress.Challenge
                 // Authoritatively reconcile the alive creature count from tracked ZDOIDs (throttled). This is
                 // what advances phases when creatures die, independent of creature/shrine ZDO ownership.
                 ReconcileIfDue();
-                // Generally this mode is entered when the shrine does not have wave information, but has passed the generation phase
-                if (wave_phases_definitions == null || enemies.Count == 0 && spawned_creatures.Get() > 0 && phase_running == false)
+                CheckProgressWatchdog();
+
+                // Rebuild the local enemies list once after taking ownership. It only drives the creature
+                // beacons and the teleport action now -- the phase gate reads ZDO state -- so this no longer
+                // needs to run every frame while creatures are alive but not yet loaded locally.
+                if (local_enemies_synced == false)
                 {
-                    Jotunn.Logger.LogInfo("Starting shrine reconnection to creatures, this will regenerate the wave definition.");
+                    local_enemies_synced = true;
                     StartCoroutine(ReconnectUnlinkedCreatures(shrine_spawnpoint.transform.position, gameObject.GetComponent<WildShrine>()));
+                }
+
+                // The wave definition is local-only state, so a client that took ownership part-way through
+                // a run may not have it. Rebuild it once from the ZDO-backed level and mode flags.
+                if (wave_phases_definitions == null || wave_phases_definitions.hordePhases == null)
+                {
+                    Jotunn.Logger.LogInfo("Shrine is missing its wave definition, regenerating it.");
                     WildShrineLevelConfiguration wLevelDefinition = wildShrineConfiguration.wildShrineLevelsConfig.ElementAt(selected_level.Get());
                     wave_phases_definitions = Levels.generateRandomWaveWithOptions(wLevelDefinition.wildLevelDefinition.ToChallengeLevelDefinition(), hard_mode.Get(), false, siege_mode.Get(), wLevelDefinition.wildLevelDefinition.maxCreaturesPerPhaseOverride);
                     RemoteLocationPortals.DrawMapOverlayAndPortals(remote_spawn_locations.Get(), gameObject.GetComponent<WildShrine>(), VFConfig.EnableShrineMapOverlay.Value);
@@ -242,10 +267,10 @@ namespace ValheimFortress.Challenge
                 if (wave_phases_definitions.hordePhases != null && wave_phases_definitions.hordePhases.Count > 0)
                 {
                     // We need to A. have spawned creatures & there needs to be none of those spawned creatures remaining
-                    if (VFConfig.EnableDebugMode.Value && log_slower == 60) { Jotunn.Logger.LogInfo($"Checking enemies: {enemies.Count} spawned_creatures: {spawned_creatures.Get()} phase_running: {phase_running}"); }
+                    if (VFConfig.EnableDebugMode.Value && log_slower == 60) { Jotunn.Logger.LogInfo($"Checking phase_spawned_total: {phase_spawned_total.Get()} spawned_creatures: {spawned_creatures.Get()} phase_spawn_in_flight: {phase_spawn_in_flight.Get()} (local enemies: {enemies.Count})"); }
                     ///if (VFConfig.EnableDebugMode.Value) { Jotunn.Logger.LogInfo("Checking start for next phase"); }
 
-                    if (force_next_phase.Get() || enemies.Count > 0 && spawned_creatures.Get() <= 0 && phase_running == false)
+                    if (ShouldAdvancePhase())
                     {
                         if (RemainingPhases())
                         {
@@ -254,9 +279,9 @@ namespace ValheimFortress.Challenge
                             should_add_creature_beacons.Set(false);
                             force_next_phase.Set(false);
                             var current_phase = currentPhase.Get();
+                            BeginPhaseSpawn();
                             spawn_controller.TrySpawningPhase(10f, true, wave_phases_definitions.hordePhases[current_phase], gameObject, remote_spawn_locations.Get());
                             SetCurrentCreatureList(wave_phases_definitions.hordePhases[current_phase]);
-                            phase_running = true;
                             int max_wave_phase = wave_phases_definitions.hordePhases.Count;
                             int expected_next_phase = currentPhase.Get() + 1;
                             if (max_wave_phase <= expected_next_phase)
@@ -295,6 +320,9 @@ namespace ValheimFortress.Challenge
                             currentPhase.Set(0);
                             wave_definition_ready.Set(false);
                             spawn_locations_ready.Set(false);
+                            phase_spawned_total.Set(0);
+                            phase_spawn_in_flight.Set(false);
+                            challenge_progress_time.Set(0);
                         }
                     }
                 }

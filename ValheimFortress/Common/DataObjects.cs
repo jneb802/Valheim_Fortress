@@ -461,8 +461,9 @@ namespace ValheimFortress.Challenge
 
 		public override Vector3[] Get() {
 			byte[] bytes = zNetView.GetZDO().GetByteArray(Key);
+			// Honour the configured default rather than handing callers a null they then iterate over.
 			if (bytes is null)
-				return null;
+				return DefaultValue;
 
 			var result = new Vector3[bytes.Length / 12];
 

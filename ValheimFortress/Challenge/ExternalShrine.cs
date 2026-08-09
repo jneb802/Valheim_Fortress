@@ -64,6 +64,9 @@ namespace ValheimFortress.Challenge
             wave_definition_ready = new BoolZNetProperty("wave_definition_ready", zNetView, false);
             spawn_locations_ready = new BoolZNetProperty("spawn_locations_ready", zNetView, false);
             force_next_phase = new BoolZNetProperty("force_next_phase", zNetView, false);
+            phase_spawned_total = new IntZNetProperty("phase_spawned_total", zNetView, 0);
+            phase_spawn_in_flight = new BoolZNetProperty("phase_spawn_in_flight", zNetView, false);
+            challenge_progress_time = new IntZNetProperty("challenge_progress_time", zNetView, 0);
             remote_spawn_locations = new ArrayVectorZNetProperty("remote_spawn_locations", zNetView, new Vector3[0]);
 
             alive_creature_list = new DictionaryZNetProperty("alive_creature_list", zNetView, new Dictionary<String, short>() { });
@@ -129,7 +132,7 @@ namespace ValheimFortress.Challenge
         {
             currentPhase.Set(0);
             challenge_active.Set(true);
-            phase_running = true;
+            BeginPhaseSpawn();
             // The runner has no in-world portals; when the caller opts in, just mark the spawn points on the
             // minimap (cleared in FinishChallenge). Local/cosmetic and a no-op without a minimap.
             if (api_draw_map_overlay) { RemoteLocationPortals.DrawSpawnLocationOverlay(remote_spawn_locations.Get(), this.gameObject.transform.position); }
@@ -149,6 +152,7 @@ namespace ValheimFortress.Challenge
             if (spawn_controller == null) { spawn_controller = this.gameObject.GetComponent<Spawner>(); }
 
             // Everything below is owner-authoritative, identical to the physical shrines.
+            NoteOwnershipState(zNetView.IsOwner());
             if (!zNetView.IsOwner()) { return; }
 
             // Kick off the challenge once BeginApiChallenge has staged the data.
@@ -167,6 +171,7 @@ namespace ValheimFortress.Challenge
                 // Authoritatively reconcile the alive count from tracked ZDOIDs (throttled). This is what
                 // advances phases as creatures die, independent of creature/shrine ZDO ownership.
                 ReconcileIfDue();
+                CheckProgressWatchdog();
 
                 // Lost the wave definition (e.g. ownership transfer before the RPC arrived). We can't
                 // reconstruct an API-supplied wave, so finish gracefully and still grant rewards.
@@ -180,16 +185,16 @@ namespace ValheimFortress.Challenge
                 if (wave_phases_definitions.hordePhases != null && wave_phases_definitions.hordePhases.Count > 0)
                 {
                     // We need to have spawned creatures, and none of them remaining, before advancing.
-                    if (force_next_phase.Get() || (enemies.Count > 0 && spawned_creatures.Get() <= 0 && phase_running == false))
+                    if (ShouldAdvancePhase())
                     {
                         if (RemainingPhases())
                         {
                             should_add_creature_beacons.Set(false);
                             force_next_phase.Set(false);
                             int current_phase = currentPhase.Get();
+                            BeginPhaseSpawn();
                             spawn_controller.TrySpawningPhase(10f, true, wave_phases_definitions.hordePhases[current_phase], gameObject, remote_spawn_locations.Get());
                             SetCurrentCreatureList(wave_phases_definitions.hordePhases[current_phase]);
-                            phase_running = true;
                             int max_wave_phase = wave_phases_definitions.hordePhases.Count;
                             int expected_next_phase = currentPhase.Get() + 1;
                             currentPhase.Set(max_wave_phase <= expected_next_phase ? max_wave_phase : expected_next_phase);
@@ -234,6 +239,9 @@ namespace ValheimFortress.Challenge
             currentPhase.Set(0);
             wave_definition_ready.Set(false);
             spawn_locations_ready.Set(false);
+            phase_spawned_total.Set(0);
+            phase_spawn_in_flight.Set(false);
+            challenge_progress_time.Set(0);
 
             // Give the reward/cleanup coroutines a moment to finish before removing the runner object.
             StartCoroutine(DestroyRunnerAfterDelay(10f));

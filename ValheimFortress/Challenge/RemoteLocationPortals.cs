@@ -22,6 +22,11 @@ namespace ValheimFortress.Challenge
         public static List<GameObject> DrawMapOverlayAndPortals(Vector3[] remote_spawns, GenericShrine shrine, bool drawOverlay = true)
         {
             List<GameObject> portals = new List<GameObject> { };
+            if (remote_spawns == null || remote_spawns.Length == 0)
+            {
+                Jotunn.Logger.LogWarning("No spawn locations available to place portals for.");
+                return portals;
+            }
 
             if (VFConfig.EnableDebugMode.Value) { Jotunn.Logger.LogInfo("Starting spawn portal placement."); }
             foreach (Vector3 spawn_location in remote_spawns)

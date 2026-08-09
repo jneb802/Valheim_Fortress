@@ -38,6 +38,7 @@ namespace ValheimFortress
         public static ConfigEntry<short> NotifyCreatureThreshold;
         public static ConfigEntry<short> TeleportCreatureThreshold;
         public static ConfigEntry<short> ShrineReconnectPauseBetweenAmount;
+        public static ConfigEntry<float> ShrineStallTimeout;
         public static ConfigEntry<float> ShrineAnnouncementRange;
         public static ConfigEntry<float> DistanceBetweenShrines;
         public static ConfigEntry<float> ShrineReconnectRange;
@@ -774,6 +775,7 @@ namespace ValheimFortress
             ShrineAnnouncementRange = BindServerConfig("Shrine of Challenge", "ShrineAnnouncementRange", 150f, "Sets the range at which announcements will display for shrine of challenge related activities", true, 50f, 800f);
             ShrineReconnectRange = BindServerConfig("Shrine of Challenge", "ShrineReconnectRange", 150f, "Sets the max range for the shrine to scan creatures for reconnection when an area is unloaded/reloaded (this includes exit/loading singleplayer).", true, 500f, 5000f);
             ShrineReconnectPauseBetweenAmount = BindServerConfig("Shrine of Challenge", "ShrineReconnectPauseBetweenAmount", 30, "Sets the maximun number of creatures to process for reconnection in a singular second.", true, 1, 60);
+            ShrineStallTimeout = BindServerConfig("Shrine of Challenge", "ShrineStallTimeout", 120f, "Seconds an active challenge may sit with no living creatures and no spawn in progress before it is forced to advance. Protects a run from stalling (and losing its rewards) when the shrine changes network owners.", true, 30f, 600f);
             DistanceBetweenShrines = BindServerConfig("Wild Shrines", "DistanceBetweenShrines", 750f, "The mimum distance between shrines, setting this higher will result in fewer wild shrines, lower more.", true, 100f, 5000f);
             NumberOfEachWildShrine = BindServerConfig("Wild Shrines", "NumberOfEachWildShrine", 100, "Each wild shrine type will attempt to be placed this many times", true, 5, 200);
             ShrineRewardPlayerBonus = BindServerConfig("Shrine of Challenge", "ShrineRewardPlayerBonus", 1f, "How much rewards are multipled for each additional player", true, 0f, 3f);

@@ -35,13 +35,28 @@ namespace ValheimFortress.Challenge
         public ArrayVectorZNetProperty remote_spawn_locations { get; set; }
         public ListStringZNetProperty adminLevelLimits { get; set; }
         public StringZNetProperty adminConfigData {  get; set; }
+        // Per-phase spawn bookkeeping. These live in the ZDO rather than in local fields so that a client
+        // which becomes the shrine owner part-way through a run (players walking in and out of range hands
+        // the ZDO around via ZDOMan.ReleaseNearbyZDOS) evaluates the phase gate exactly as the previous
+        // owner would have. phase_spawned_total counts creatures registered for the current phase;
+        // phase_spawn_in_flight is true from the moment a phase spawn is kicked off until the spawner
+        // finishes placing it.
+        public IntZNetProperty phase_spawned_total { get; set; }
+        public BoolZNetProperty phase_spawn_in_flight { get; set; }
+        // Wall-clock (network time) seconds of the last point at which the run could still make progress.
+        // Drives the stall watchdog; see CheckProgressWatchdog.
+        public IntZNetProperty challenge_progress_time { get; set; }
 
         protected bool client_set_creature_beacons = false;
+        // Whether the local 'enemies' list has been rebuilt since this client last became the shrine owner.
+        // 'enemies' is local-only state belonging to whichever client drove the run before, so it needs a
+        // one-time rebuild after an ownership change -- see NoteOwnershipState.
+        protected bool local_enemies_synced = false;
+        private bool was_owner = false;
         protected List<GameObject> enemies = new List<GameObject>();
         protected GameObject shrine_spawnpoint;
         protected GameObject shrine_portal;
         protected PhasedWaveTemplate wave_phases_definitions;
-        protected bool phase_running = false;
         protected Spawner spawn_controller;
         protected int availablePhases;
         protected Rewards reward_controller = new Rewards();
@@ -77,6 +92,9 @@ namespace ValheimFortress.Challenge
                 wave_definition_ready = new BoolZNetProperty("wave_definition_ready", zNetView, false);
                 spawn_locations_ready = new BoolZNetProperty("spawn_locations_ready", zNetView, false);
                 force_next_phase = new BoolZNetProperty("force_next_phase", zNetView, false);
+                phase_spawned_total = new IntZNetProperty("phase_spawned_total", zNetView, 0);
+                phase_spawn_in_flight = new BoolZNetProperty("phase_spawn_in_flight", zNetView, false);
+                challenge_progress_time = new IntZNetProperty("challenge_progress_time", zNetView, 0);
                 remote_spawn_locations = new ArrayVectorZNetProperty("remote_spawn_locations", zNetView, new Vector3[0]);
                 adminLevelLimits = new ListStringZNetProperty("adminLevelLimits", zNetView, new List<string>() { });
                 adminConfigData = new StringZNetProperty("adminConfigData", zNetView, "filter:levelname,levelname2");
@@ -181,8 +199,10 @@ namespace ValheimFortress.Challenge
             Jotunn.Logger.LogDebug($"creatures to reconnect: {records.Count}");
             if (records.Count == 0)
             {
-                // Nothing alive to reconnect to; advance to the next phase if there is one.
-                force_next_phase.Set(true);
+                // Nothing alive to reconnect to; advance to the next phase if there is one. Only when this
+                // phase actually placed creatures -- an empty record list before the first spawn lands just
+                // means the spawner has not gotten to it yet, and forcing there would skip a phase.
+                if (phase_spawned_total.Get() > 0) { force_next_phase.Set(true); }
                 yield break;
             }
 
@@ -213,7 +233,8 @@ namespace ValheimFortress.Challenge
                 enemies.Add(instance);
             }
 
-            if (enemies.Count == 0 && spawned_creatures.Get() <= 0 && phase_running == false)
+            if (enemies.Count == 0 && spawned_creatures.Get() <= 0 && phase_spawn_in_flight.Get() == false
+                && phase_spawned_total.Get() > 0)
             {
                 Jotunn.Logger.LogInfo("No live creatures remain after reconnection, force starting next phase.");
                 force_next_phase.ForceSet(true);
@@ -333,6 +354,10 @@ namespace ValheimFortress.Challenge
             records.Add(new SpawnedCreatureRecord(creature_id, prefab_name));
             spawned_creature_records.Set(records);
             spawned_creatures.Set(records.Count);
+            // Records the fact that this phase actually placed creatures, independent of the local 'enemies'
+            // list, so the phase gate survives an owner change.
+            phase_spawned_total.Set(phase_spawned_total.Get() + 1);
+            TouchProgressWatchdog();
         }
 
         // Throttled entry point for owner-side reconciliation; call once per Update from the owner region.
@@ -342,6 +367,97 @@ namespace ValheimFortress.Challenge
             if (reconcile_tick < reconcile_tick_interval) { return; }
             reconcile_tick = 0;
             ReconcileSpawnedCreatures();
+        }
+
+        // Feed this the result of the per-Update IsOwner check. On a false->true transition (players moving
+        // in and out of range hands the shrine ZDO around) the local run state belongs to a different client,
+        // so flag it for a one-time rebuild instead of rebuilding it every frame.
+        protected void NoteOwnershipState(bool is_owner)
+        {
+            if (is_owner == false) { was_owner = false; return; }
+            if (was_owner == false)
+            {
+                was_owner = true;
+                local_enemies_synced = false;
+            }
+        }
+
+        // Call immediately before spawn_controller.TrySpawningPhase. Resets the per-phase spawn counter and
+        // flags a spawn as in flight, both in the ZDO, so an owner change mid-phase does not lose the fact
+        // that a phase is currently being placed.
+        protected void BeginPhaseSpawn()
+        {
+            phase_spawned_total.Set(0);
+            phase_spawn_in_flight.Set(true);
+            TouchProgressWatchdog();
+        }
+
+        // Ownership-independent phase gate: is the current phase finished, so the run may advance (or pay
+        // out)? Every term is ZDO-backed, so whichever client owns the shrine reaches the same answer. This
+        // replaces the old 'enemies.Count > 0 && phase_running == false' test, which read local-only fields:
+        // a client that took ownership part-way through a run had an empty 'enemies' list, so once the last
+        // creature died neither the recovery branch (needs spawned_creatures > 0) nor this gate (needed
+        // enemies.Count > 0) could fire and the challenge hung forever without granting rewards.
+        protected bool ShouldAdvancePhase()
+        {
+            if (force_next_phase.Get()) { return true; }
+            return phase_spawned_total.Get() > 0
+                && spawned_creatures.Get() <= 0
+                && phase_spawn_in_flight.Get() == false;
+        }
+
+        protected void TouchProgressWatchdog()
+        {
+            if (ZNet.instance == null) { return; }
+            int now = (int)ZNet.instance.GetTimeSeconds();
+            // This runs every Update while a challenge is live, and ZDO.Set marks the object dirty for
+            // network sync, so only write when the whole-second value actually moves.
+            if (challenge_progress_time.Get() == now) { return; }
+            challenge_progress_time.Set(now);
+        }
+
+        // Safety net for a run that can no longer make progress on its own -- an owner that vanished
+        // mid-spawn, a spawn coroutine lost with its client, creature ZDOs removed out from under us. If
+        // ShrineStallTimeout passes with no sign of progress the run is forced forward, so it always reaches
+        // its payout instead of leaving the shrine permanently active and unusable.
+        //
+        // Progress is anything that moves the run along: creatures alive (players are fighting), a phase
+        // spawn being kicked off, or a creature registering. Deliberately NOT phase_spawn_in_flight -- that
+        // flag is cleared by the spawn coroutine, so an owner that disappears mid-spawn leaves it stuck true,
+        // which is precisely the stall this watchdog has to break. The longest legitimate gap between
+        // progress signals is the between-phase regroup (10s) plus a spawn segment pause (up to 5s), well
+        // inside the 30s minimum timeout.
+        // Owner-only; call once per Update from the owner region of a challenge that is active.
+        protected void CheckProgressWatchdog()
+        {
+            if (ZNet.instance == null) { return; }
+            if (spawned_creatures.Get() > 0)
+            {
+                TouchProgressWatchdog();
+                return;
+            }
+
+            int now = (int)ZNet.instance.GetTimeSeconds();
+            int last_progress = challenge_progress_time.Get();
+            // First observation (or a clock that moved backwards) just seeds the timestamp.
+            if (last_progress <= 0 || last_progress > now)
+            {
+                TouchProgressWatchdog();
+                return;
+            }
+            if ((now - last_progress) < VFConfig.ShrineStallTimeout.Value) { return; }
+
+            Jotunn.Logger.LogWarning($"Challenge made no progress for {now - last_progress}s; forcing it forward so rewards are not lost.");
+            phase_spawn_in_flight.Set(false);
+            // Nothing was ever placed for this phase (the spawn was lost with its client), so step back and
+            // retry the same phase rather than skipping it.
+            if (phase_spawned_total.Get() == 0 && currentPhase.Get() > 0)
+            {
+                currentPhase.Set(currentPhase.Get() - 1);
+            }
+            // force_next_phase short-circuits ShouldAdvancePhase, so the run resumes on the next Update.
+            force_next_phase.Set(true);
+            TouchProgressWatchdog();
         }
 
         // Owner-authoritative alive-count reconciliation. Walks the tracked ZDOIDs and asks ZDOMan whether
@@ -417,7 +533,7 @@ namespace ValheimFortress.Challenge
         }
 
         public bool IsChallengeActive() {
-            // Jotunn.Logger.LogInfo($"Checking if challenge is active: {challenge_active.Get()} | phase_running {phase_running}");
+            // Jotunn.Logger.LogInfo($"Checking if challenge is active: {challenge_active.Get()} | phase_spawn_in_flight {phase_spawn_in_flight.Get()}");
             return challenge_active.Get();
         }
 
@@ -459,7 +575,7 @@ namespace ValheimFortress.Challenge
 
         public void phaseCompleted()
         {
-            phase_running = false;
+            phase_spawn_in_flight.Set(false);
         }
 
         public int EnemiesRemaining()
@@ -538,6 +654,9 @@ namespace ValheimFortress.Challenge
             wave_phases_definitions = new PhasedWaveTemplate(); // Got to clear the template
             wave_definition_ready.Set(false);
             spawn_locations_ready.Set(false);
+            phase_spawned_total.Set(0);
+            phase_spawn_in_flight.Set(false);
+            challenge_progress_time.Set(0);
             availablePhases = 0;
             currentPhase.ForceSet(0);
         }
@@ -590,8 +709,21 @@ namespace ValheimFortress.Challenge
             if (alive_creatures != spawned_creatures.Get()) { spawned_creatures.Set(alive_creatures); }
         }
 
+        // Rewards are worthless if they land somewhere the players will never look, so never trust a
+        // spawnpoint that failed to resolve -- fall back to the shrine itself.
+        protected Vector3 ResolveRewardPosition(Vector3 spawn_position)
+        {
+            if (spawn_position == Vector3.zero)
+            {
+                Jotunn.Logger.LogWarning("Reward spawn position was unset; falling back to the shrine position.");
+                return this.transform.position;
+            }
+            return spawn_position;
+        }
+
         public void SpawnMultiRewardsDirectly(Dictionary<String, short> rewards_and_costs, short level, Vector3 spawn_position, bool hard_mode, bool boss_mode, bool siege_mode)
         {
+            spawn_position = ResolveRewardPosition(spawn_position);
             float total_reward_points = RewardsData.DetermineRewardPoints(level, hard_mode, boss_mode, siege_mode, DetermineMultiplayerBonus());
             float equal_split_rewards_total = total_reward_points / rewards_and_costs.Count;
             foreach (KeyValuePair<String, short> reward_entry in rewards_and_costs)
@@ -603,6 +735,7 @@ namespace ValheimFortress.Challenge
         }
         public void SpawnReward(Vector3 spawn_position)
         {
+            spawn_position = ResolveRewardPosition(spawn_position);
             string reward_resource = selected_reward.Get();
             short number_of_rewards = RewardsData.DetermineRewardAmount(reward_resource, (short)selected_level_index.Get(), hard_mode.Get(), boss_mode.Get(), siege_mode.Get(), DetermineMultiplayerBonus());
             string reward_prefab = RewardsData.resourceRewards[reward_resource].resourcePrefab;
@@ -615,6 +748,7 @@ namespace ValheimFortress.Challenge
         public void SpawnFixedRewardsDirectly(Dictionary<String, short> rewards_and_amounts, Vector3 spawn_position)
         {
             if (rewards_and_amounts == null) { return; }
+            spawn_position = ResolveRewardPosition(spawn_position);
             foreach (KeyValuePair<String, short> reward_entry in rewards_and_amounts)
             {
                 if (reward_entry.Value <= 0) { continue; }

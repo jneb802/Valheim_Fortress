@@ -8,9 +8,11 @@ namespace ValheimFortress.Challenge
     internal class ArenaShrine : GenericShrine
     {
         private ArenaShrineUI ui_controller;
-        static new Vector3[] remote_spawn_locations = new Vector3[0];
+        // This is the gladiator shrine, so creatures only ever come from its own internal spawnpoint. Kept as
+        // a per-instance field rather than the inherited ZDO property (no remote points to synchronise) --
+        // and emphatically not static, or one arena would spawn its wave at another arena's spawnpoint.
+        private Vector3[] arena_spawn_locations = new Vector3[0];
         private short fail_to_start = 0;
-        // We statically set the remote spawn locations to the internal shrine spawnpoint, because this is the gladiator shrine and thats the only place it spawns things from.
 
         public override string GetHoverName()
         {
@@ -52,9 +54,9 @@ namespace ValheimFortress.Challenge
             {
                 challenge_active.Set(true);
                 currentPhase.Set(0); //ensure this is zero
-                spawn_controller.TrySpawningPhase(5f, false, wave_phases_definitions.hordePhases[currentPhase.Get()], gameObject, remote_spawn_locations);
+                BeginPhaseSpawn();
+                spawn_controller.TrySpawningPhase(5f, false, wave_phases_definitions.hordePhases[currentPhase.Get()], gameObject, arena_spawn_locations);
                 SetCurrentCreatureList(wave_phases_definitions.hordePhases[currentPhase.Get()]);
-                phase_running = true;
                 Jotunn.Logger.LogInfo($"Challenge started. Level: {selected_level.Get()} Reward: {selected_reward.Get()}");
                 start_challenge.Set(false);
                 currentPhase.Set(currentPhase.Get() + 1);
@@ -88,10 +90,10 @@ namespace ValheimFortress.Challenge
 
             // reconnect componets if they go missing
             // Set the spawnpoint to the internal portal
-            if (ui_controller == null || spawn_controller == null || shrine_spawnpoint == null || remote_spawn_locations == null)
+            if (ui_controller == null || spawn_controller == null || arena_spawn_locations.Length == 0)
             {
                 spawn_controller = this.gameObject.GetComponent<Spawner>();
-                remote_spawn_locations = new Vector3[] { shrine_spawnpoint.transform.position, shrine_spawnpoint.transform.position, shrine_spawnpoint.transform.position };
+                arena_spawn_locations = new Vector3[] { shrine_spawnpoint.transform.position, shrine_spawnpoint.transform.position, shrine_spawnpoint.transform.position };
                 ui_controller = this.gameObject.GetComponent<ArenaShrineUI>();
             }
 
@@ -113,6 +115,7 @@ namespace ValheimFortress.Challenge
             }
 
             // Everything past here should only be run once, by whatever main thread is controlling the ticks in this region.
+            NoteOwnershipState(zNetView.IsOwner());
             if (!zNetView.IsOwner())
             {
                 return;
@@ -148,11 +151,22 @@ namespace ValheimFortress.Challenge
                 // Authoritatively reconcile the alive creature count from tracked ZDOIDs (throttled). This is
                 // what advances phases when creatures die, independent of creature/shrine ZDO ownership.
                 ReconcileIfDue();
-                // the challenge should be running but there are no phase definitions. This happens when the shrine has become disconnected.
-                if (wave_phases_definitions == null || enemies.Count == 0 && spawned_creatures.Get() > 0 && phase_running == false)
+                CheckProgressWatchdog();
+
+                // Rebuild the local enemies list once after taking ownership. It only drives the creature
+                // beacons and the teleport action now -- the phase gate reads ZDO state -- so this no longer
+                // needs to run every frame while creatures are alive but not yet loaded locally.
+                if (local_enemies_synced == false)
                 {
-                    Jotunn.Logger.LogInfo("Starting shrine reconnection to creatures, this will regenerate the wave definition.");
+                    local_enemies_synced = true;
                     StartCoroutine(ReconnectUnlinkedCreatures(shrine_spawnpoint.transform.position, gameObject.GetComponent<ArenaShrine>()));
+                }
+
+                // The wave definition is local-only state, so a client that took ownership part-way through
+                // a run may not have it. Rebuild it once from the ZDO-backed level and mode flags.
+                if (wave_phases_definitions == null || wave_phases_definitions.hordePhases == null)
+                {
+                    Jotunn.Logger.LogInfo("Shrine is missing its wave definition, regenerating it.");
                     List<ChallengeLevelDefinition> clevels = ChallengeLevels.GetChallengeLevelDefinitions();
                     ChallengeLevelDefinition levelDefinition = clevels.ElementAt(selected_level.Get());
                     wave_phases_definitions = Levels.generateRandomWaveWithOptions(levelDefinition, hard_mode.Get(), boss_mode.Get(), siege_mode.Get(), VFConfig.ChallengeShrineMaxCreaturesPerWave.Value);
@@ -164,16 +178,16 @@ namespace ValheimFortress.Challenge
                 if (wave_phases_definitions.hordePhases.Count > 0)
                 {
                     // We need to A. have spawned creatures & there needs to be none of those spawned creatures remaining
-                    if (force_next_phase.Get() || enemies.Count > 0 && spawned_creatures.Get() <= 0 && phase_running == false)
+                    if (ShouldAdvancePhase())
                     {
                         if (RemainingPhases())
                         {
                             // Start the next phase
                             should_add_creature_beacons.Set(false);
                             force_next_phase.Set(false);
-                            phase_running = true;
+                            BeginPhaseSpawn();
                             var current_phase = currentPhase.Get();
-                            spawn_controller.TrySpawningPhase(10f, true, wave_phases_definitions.hordePhases[current_phase], gameObject, remote_spawn_locations);
+                            spawn_controller.TrySpawningPhase(10f, true, wave_phases_definitions.hordePhases[current_phase], gameObject, arena_spawn_locations);
                             SetCurrentCreatureList(wave_phases_definitions.hordePhases[current_phase]);
                             currentPhase.Set(current_phase + 1);
                         }
@@ -201,6 +215,9 @@ namespace ValheimFortress.Challenge
                             SendUpdatedPhaseConfigs();
                             wave_definition_ready.Set(false);
                             spawn_locations_ready.Set(false);
+                            phase_spawned_total.Set(0);
+                            phase_spawn_in_flight.Set(false);
+                            challenge_progress_time.Set(0);
                         }
                     }
                 }

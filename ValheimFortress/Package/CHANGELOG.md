@@ -1,4 +1,15 @@
 
+  **0.36.2**
+---
+```
+- Fixes wild shrine rewards spawning at a different wild shrine instead of the one that was completed
+- Fixes challenge runs stalling permanently without granting rewards when players moving in and out of range hand the shrine between clients. Phase tracking is now stored on the shrine itself rather than in per-client state, so any client can finish a run someone else started
+- Fixes wild shrines registering their wave sync on the challenge-level config channel, which prevented other players from ever receiving the wave definition
+- Fixes arena shrines being able to spawn their wave at another arena's spawnpoint
+- Fixes a wild shrine that failed to build its wave data starting the challenge anyway, leaving it active and unable to pay out
+- Stops spawn portals and map overlays being rebuilt every frame after an ownership change
+```
+
   **0.36.1**
 ---
 ```
