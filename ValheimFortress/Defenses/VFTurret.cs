@@ -491,5 +491,9 @@ namespace ValheimFortress.Defenses
 				areaMarker.gameObject.SetActive(false);
 			}
 		}
-	}
+
+        public float GetHoverOffset() {
+            throw new NotImplementedException();
+        }
+    }
 }

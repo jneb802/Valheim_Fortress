@@ -646,7 +646,7 @@ namespace ValheimFortress.Challenge
             boss_mode.ForceSet(false);
             hard_mode.ForceSet(false);
             siege_mode.ForceSet(false);
-            // Authoritatively remove any still-living challenge creatures (ForceSet above guarantees we own
+            // Authoritively remove any still-living challenge creatures (ForceSet above guarantees we own
             // the shrine ZDO at this point). Replaces the old per-creature, owner-gated CreatureTracker cleanup.
             DestroyAllSpawnedCreatures();
             Disableportal();
@@ -774,6 +774,10 @@ namespace ValheimFortress.Challenge
             {
                 return 1f;
             }
+        }
+
+        public float GetHoverOffset() {
+            throw new NotImplementedException();
         }
     }
 }
