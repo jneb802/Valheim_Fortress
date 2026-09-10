@@ -777,7 +777,11 @@ namespace ValheimFortress.Challenge
         }
 
         public float GetHoverOffset() {
-            throw new NotImplementedException();
+            // Hoverable gained this member in the Sept 2026 game update. Every vanilla implementer
+            // returns a serialized m_hoverOffset; zero keeps the shrine's hover text where it has
+            // always been. Throwing here would take out Player.UpdateHover the moment anyone looked
+            // at a shrine.
+            return 0f;
         }
     }
 }
