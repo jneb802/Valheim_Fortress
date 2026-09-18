@@ -9,9 +9,14 @@
          Program Files locations; set it for a non-Steam or second install. -->
     <VALHEIM_INSTALL>C:\Program Files (x86)\Steam\steamapps\common\Valheim</VALHEIM_INSTALL>
 
-    <!-- Folder holding core/BepInEx.dll. Defaults to $(VALHEIM_INSTALL)\BepInEx, then to
-         the first Gale / r2modman / Thunderstore profile that has one. Set it to pin a
-         specific profile. -->
+    <!-- Mod-manager profile to compile against, so the BepInEx/Harmony/MonoMod on the
+         reference list match what the mod is loaded next to at runtime. Defaults to the
+         profile the build deploys into; looked up under Gale, r2modman and Thunderstore MM. -->
+    <!-- <VALHEIM_PROFILE>Modtest</VALHEIM_PROFILE> -->
+
+    <!-- Folder holding core/BepInEx.dll. Normally derived from VALHEIM_PROFILE above, falling
+         back to $(VALHEIM_INSTALL)\BepInEx and then to the first profile that has one. Set it
+         to pin a path the profile lookup cannot reach. -->
     <!-- <BEPINEX_PATH>$(AppData)\com.kesomannen.gale\valheim\profiles\Modtest\BepInEx</BEPINEX_PATH> -->
 
     <!-- Set to false to skip publicizing and reuse whatever is already in

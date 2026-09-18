@@ -85,17 +85,43 @@
        modded through Gale / r2modman / Thunderstore MM, which keep a BepInEx per profile
        and leave the install vanilla - and then every BepInEx, Harmony, Mono.Cecil and
        MonoMod reference fails to resolve and the compile dies in hundreds of CS0246s.
-       Fall back to the first profile that actually has a BepInEx core; any BepInEx 5 is
-       fine to compile against, and Environment.props can pin a specific one. -->
+       So the profiles are where this looks: the one named by VALHEIM_PROFILE first, then the
+       game install, then any profile that has a BepInEx core at all. -->
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <_VhGaleProfiles>$(AppData)\com.kesomannen.gale\valheim\profiles</_VhGaleProfiles>
+    <_VhR2Profiles>$(AppData)\r2modmanPlus-local\Valheim\profiles</_VhR2Profiles>
+    <_VhTsmmProfiles>$(AppData)\Thunderstore Mod Manager\DataFolder\Valheim\profiles</_VhTsmmProfiles>
+  </PropertyGroup>
+
+  <!-- Compile against the profile the build also deploys into, so the BepInEx, Harmony,
+       Mono.Cecil and MonoMod on the compiler's reference list are the ones the mod is loaded
+       next to when it runs. Left to the probes below, this landed on whichever profile the
+       recursive scan happened to hit first - a profile nobody tests this mod in, and one that
+       silently moves if it is renamed or removed.
+
+       Override with -p:VALHEIM_PROFILE=Name for a one-off build, or pin BEPINEX_PATH outright
+       in Environment.props. Set it empty to fall straight through to the probes below. -->
+  <PropertyGroup>
+    <VALHEIM_PROFILE Condition="'$(VALHEIM_PROFILE)' == ''">Modtest</VALHEIM_PROFILE>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(VALHEIM_PROFILE)' != '' And '$(OS)' == 'Windows_NT'">
+    <_VhProfileBepInEx Condition="Exists('$(_VhGaleProfiles)\$(VALHEIM_PROFILE)\BepInEx\core\BepInEx.dll')">$(_VhGaleProfiles)\$(VALHEIM_PROFILE)\BepInEx</_VhProfileBepInEx>
+    <_VhProfileBepInEx Condition="'$(_VhProfileBepInEx)' == '' And Exists('$(_VhR2Profiles)\$(VALHEIM_PROFILE)\BepInEx\core\BepInEx.dll')">$(_VhR2Profiles)\$(VALHEIM_PROFILE)\BepInEx</_VhProfileBepInEx>
+    <_VhProfileBepInEx Condition="'$(_VhProfileBepInEx)' == '' And Exists('$(_VhTsmmProfiles)\$(VALHEIM_PROFILE)\BepInEx\core\BepInEx.dll')">$(_VhTsmmProfiles)\$(VALHEIM_PROFILE)\BepInEx</_VhProfileBepInEx>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(BEPINEX_PATH)' == ''">
+    <BEPINEX_PATH Condition="'$(_VhProfileBepInEx)' != ''">$(_VhProfileBepInEx)</BEPINEX_PATH>
+  </PropertyGroup>
+
+  <!-- Named profile missing - another machine, CI, a fresh clone - so fall back to the game
+       install, then to any profile at all, rather than failing to compile. -->
   <PropertyGroup Condition="'$(BEPINEX_PATH)' == ''">
     <BEPINEX_PATH Condition="Exists('$(VALHEIM_INSTALL)\BepInEx\core\BepInEx.dll')">$(VALHEIM_INSTALL)\BepInEx</BEPINEX_PATH>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(BEPINEX_PATH)' == '' And '$(OS)' == 'Windows_NT'">
-    <_VhGaleProfiles>$(AppData)\com.kesomannen.gale\valheim\profiles</_VhGaleProfiles>
-    <_VhR2Profiles>$(AppData)\r2modmanPlus-local\Valheim\profiles</_VhR2Profiles>
-    <_VhTsmmProfiles>$(AppData)\Thunderstore Mod Manager\DataFolder\Valheim\profiles</_VhTsmmProfiles>
-
     <!-- GetFiles returns absolute paths joined by ';', and only profiles that really have
          a BepInEx show up at all, so the first hit is a usable one. Each manager is
          searched only while nothing has been found yet. -->
@@ -121,6 +147,36 @@
     <PublicizedAssembliesPath Condition="'$(PublicizedAssembliesPath)' == '' And '$(VALHEIM_MANAGED)' != ''">$(VALHEIM_MANAGED)\publicized_assemblies</PublicizedAssembliesPath>
   </PropertyGroup>
 
+  <!-- ==================== references the game no longer ships ==================== -->
+  <!-- JotunnLib's JotunnLibRefsCorlib.props hard-codes one <Reference> per vanilla assembly,
+       and Valheim has since stopped shipping some of them - UnityEngine.ProfilerModule.dll is
+       gone from valheim_Data/Managed, so its HintPath points at nothing.
+
+       On its own that is harmless, because nothing here uses those types. What is not harmless
+       is how MSBuild recovers: the default AssemblySearchPaths ends with $(OutDir), so RAR
+       quietly falls back to whatever an earlier build left in bin\. bin\Debug still held a
+       2024-era UnityEngine.ProfilerModule.dll - copied there by the very fallback that then
+       kept finding it - while bin\Release did not. Debug compiled against 96 references and
+       Release against 95, from the same source, and only Release could ever surface the
+       breakage, and a `Clean` on either side flips which one is "broken".
+
+       Dropping the dangling references up front makes both configurations resolve the same set
+       and stops a stale output folder from standing in for an assembly the game no longer has.
+       Done in a target rather than an ItemGroup here, because the Reference items come from
+       JotunnLib's props, which NuGet imports after this file.
+
+       Not done by editing AssemblySearchPaths: $(OutDir) ends in a backslash, and
+       $(AssemblySearchPaths.Replace('$(OutDir)', '')) mis-parses that trailing ' and empties
+       the whole search path, leaving the compile with nothing but mscorlib. -->
+  <Target Name="DropStaleValheimReferences" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <_VhDeadReference Include="@(Reference)" Condition="'%(Reference.HintPath)' != '' And !Exists('%(Reference.HintPath)')" />
+      <Reference Remove="@(_VhDeadReference)" />
+    </ItemGroup>
+    <Message Importance="High" Condition="'@(_VhDeadReference)' != ''"
+             Text="Dropping $(Configuration) reference(s) missing from the game install: @(_VhDeadReference->'%(Identity)', ', ')" />
+  </Target>
+
   <!-- ==================== diagnostics ==================== -->
   <!-- Only for the projects that actually consume the vanilla and BepInEx references, which
        here means the ones referencing JotunnLib: it is JotunnLib's props that turn
@@ -137,6 +193,10 @@
     </PropertyGroup>
     <Warning Condition="'$(_VhUsesGameAssemblies)' == 'true' And !Exists('$(VALHEIM_MANAGED)')"
              Text="Valheim's Managed folder was not found (VALHEIM_INSTALL='$(VALHEIM_INSTALL)'). Vanilla references will not resolve and the assemblies cannot be publicized. Set VALHEIM_INSTALL in Environment.props - see Environment.props.example." />
+    <!-- Only fires when a different BepInEx actually stood in for the named profile. A machine
+         with no BepInEx at all is already covered by the warning below. -->
+    <Warning Condition="'$(_VhUsesGameAssemblies)' == 'true' And '$(VALHEIM_PROFILE)' != '' And '$(_VhProfileBepInEx)' == '' And '$(BEPINEX_PATH)' != ''"
+             Text="VALHEIM_PROFILE='$(VALHEIM_PROFILE)' has no BepInEx, so this build compiled against '$(BEPINEX_PATH)' instead. Set VALHEIM_PROFILE to a profile that exists, or pin BEPINEX_PATH in Environment.props - see Environment.props.example." />
     <Warning Condition="'$(_VhUsesGameAssemblies)' == 'true' And !Exists('$(BEPINEX_PATH)\core\BepInEx.dll')"
              Text="BepInEx was not found (BEPINEX_PATH='$(BEPINEX_PATH)'). BepInEx, Harmony, Mono.Cecil and MonoMod references will not resolve. Set BEPINEX_PATH in Environment.props - see Environment.props.example." />
   </Target>
