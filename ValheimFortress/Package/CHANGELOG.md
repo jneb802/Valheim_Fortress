@@ -1,3 +1,9 @@
+  **0.37.2**
+---
+```
+- Fixes many particle assets to properly support Mac metal shader
+```
+
   **0.37.1**
 ---
 ```
