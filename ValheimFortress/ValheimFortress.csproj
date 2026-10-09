@@ -12,7 +12,7 @@
     <VALHEIM_MANAGED Condition="'$(VALHEIM_MANAGED)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">$(VALHEIM_INSTALL)/Valheim.app/Contents/Resources/Data/Managed</VALHEIM_MANAGED>
     <VALHEIM_MANAGED Condition="'$(VALHEIM_MANAGED)' == ''">$(VALHEIM_INSTALL)/valheim_Data/Managed</VALHEIM_MANAGED>
     <PUBLICIZED_PATH Condition="'$(PUBLICIZED_PATH)' == ''">$(VALHEIM_MANAGED)/publicized_assemblies</PUBLICIZED_PATH>
-    <BEPINEX_CORE Condition="'$(BEPINEX_CORE)' == ''">$(VALHEIM_INSTALL)/BepInEx/core</BEPINEX_CORE>
+    <BEPINEX_CORE Condition="'$(BEPINEX_CORE)' == ''">$(BEPINEX_PATH)/core</BEPINEX_CORE>
   </PropertyGroup>
   <Import Project="Environment.props" Condition="Exists('Environment.props')" />
   <ItemGroup>
@@ -29,7 +29,7 @@
     <EmbeddedResource Include="Localizations/*.json" />
   </ItemGroup>
   <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
-    <Error Condition="!Exists('$(PUBLICIZED_PATH)/assembly_valheim_publicized.dll')" Text="Set PUBLICIZED_PATH to the publicized assemblies for your Valheim installation. See BUILDING.md." />
-    <Error Condition="!Exists('$(BEPINEX_CORE)/BepInEx.dll')" Text="Set BEPINEX_CORE to your BepInEx core directory. See BUILDING.md." />
+    <Error Condition="!Exists('$(PUBLICIZED_PATH)/assembly_valheim_publicized.dll')" Text="Set PUBLICIZED_PATH to the publicized assemblies for your Valheim installation." />
+    <Error Condition="!Exists('$(BEPINEX_CORE)/BepInEx.dll')" Text="Set BEPINEX_CORE to your BepInEx core directory." />
   </Target>
 </Project>

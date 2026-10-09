@@ -1,3 +1,21 @@
+  **0.37.2**
+---
+```
+- Fixes many particle assets to properly support Mac metal shader
+```
+
+  **0.37.1**
+---
+```
+- Fix shrine interaction
+```
+
+  **0.37.0**
+---
+```
+- Updated for Deep North!
+```
+
 
   **0.36.2**
 ---
