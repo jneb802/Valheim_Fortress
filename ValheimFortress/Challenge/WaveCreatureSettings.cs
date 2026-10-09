@@ -13,14 +13,12 @@ namespace ValheimFortress.Challenge
 
     internal static class WaveCreatureSettings
     {
-        internal const int MaximumSupportedStars = 10;
-
         internal static void ApplyToWave(PhasedWaveTemplate wave, ChallengeLevelDefinition level)
         {
-            int minimum = Math.Max(0, Math.Min(MaximumSupportedStars, level.minimumStars));
+            int minimum = Math.Max(0, level.minimumStars);
             if (minimum != level.minimumStars)
             {
-                Jotunn.Logger.LogWarning($"minimumStars {level.minimumStars} is outside 0..{MaximumSupportedStars}; using {minimum}.");
+                Jotunn.Logger.LogWarning($"minimumStars {level.minimumStars} is negative; using 0.");
             }
 
             // Store the settings on each horde: the existing phase serialization then carries
@@ -30,7 +28,6 @@ namespace ValheimFortress.Challenge
                 foreach (HoardConfig horde in phase)
                 {
                     horde.minimumStars = minimum;
-                    horde.stars = (short)Math.Max(horde.stars, minimum);
                     horde.slsModifiers = level.slsModifiers == null
                         ? null : new Dictionary<string, SlsModifierType>(level.slsModifiers);
                 }
@@ -40,7 +37,7 @@ namespace ValheimFortress.Challenge
         internal static void ApplyToCreature(Character creature, HoardConfig horde)
         {
             if (creature == null) { return; }
-            int minimum = Math.Max(0, Math.Min(MaximumSupportedStars, horde.minimumStars));
+            int minimum = Math.Max(0, horde.minimumStars);
             int level = Math.Max(creature.GetLevel(), Math.Max(horde.stars, minimum) + 1);
             // SetLevel updates the networked level and vanilla health, unlike assigning m_level.
             // SLS receives the same level and persists its own cache through its public API.
