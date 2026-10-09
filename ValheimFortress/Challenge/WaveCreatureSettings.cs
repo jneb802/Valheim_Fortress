@@ -15,33 +15,73 @@ namespace ValheimFortress.Challenge
     {
         internal static void ApplyToWave(PhasedWaveTemplate wave, ChallengeLevelDefinition level)
         {
-            int minimum = Math.Max(0, level.minimumStars);
-            if (minimum != level.minimumStars)
+            if (level.waveOverrides != null)
             {
-                Jotunn.Logger.LogWarning($"minimumStars {level.minimumStars} is negative; using 0.");
-            }
-            int? maximum = level.maximumStars.HasValue ? Math.Max(0, level.maximumStars.Value) : (int?)null;
-            if (maximum != level.maximumStars)
-            {
-                Jotunn.Logger.LogWarning($"maximumStars {level.maximumStars} is negative; using 0.");
-            }
-            if (maximum.HasValue && minimum > maximum.Value)
-            {
-                Jotunn.Logger.LogWarning($"minimumStars {minimum} exceeds maximumStars {maximum}; using {maximum} for both.");
-                minimum = maximum.Value;
+                foreach (int waveNumber in level.waveOverrides.Keys)
+                {
+                    if (waveNumber < 1 || waveNumber > wave.hordePhases.Count)
+                    {
+                        Jotunn.Logger.LogWarning($"waveOverrides entry {waveNumber} is outside this event's waves 1..{wave.hordePhases.Count}; ignored.");
+                    }
+                }
             }
 
-            // Store the settings on each horde: the existing phase serialization then carries
-            // them to the spawning peer and preserves them when an unfinished run reloads.
-            foreach (List<HoardConfig> phase in wave.hordePhases)
+            for (int phaseIndex = 0; phaseIndex < wave.hordePhases.Count; phaseIndex++)
             {
-                foreach (HoardConfig horde in phase)
+                WaveSpawnSettingsOverride waveSettings = null;
+                level.waveOverrides?.TryGetValue(phaseIndex + 1, out waveSettings);
+                foreach (HoardConfig horde in wave.hordePhases[phaseIndex])
                 {
-                    horde.minimumStars = minimum;
-                    horde.maximumStars = maximum;
-                    horde.slsModifiers = level.slsModifiers == null
-                        ? null : new Dictionary<string, SlsModifierType>(level.slsModifiers);
+                    horde.minimumStars = level.minimumStars;
+                    horde.maximumStars = level.maximumStars;
+                    horde.slsModifiers = level.slsModifiers;
+                    ApplyOverride(horde, waveSettings);
+                    if (waveSettings?.creatureOverrides != null)
+                    {
+                        // Matching rules apply in YAML list order; later fields take priority.
+                        foreach (CreatureSpawnSettingsOverride rule in waveSettings.creatureOverrides)
+                        {
+                            if (rule?.creatures != null &&
+                                (rule.creatures.Contains(horde.creature) || rule.creatures.Contains(horde.prefab)))
+                            {
+                                ApplyOverride(horde, rule);
+                            }
+                        }
+                    }
+                    NormalizeStars(horde);
+                    // Serialize the resolved settings, not the rules, so reloads and spawning
+                    // peers receive the same result without needing to resolve the config again.
+                    horde.slsModifiers = horde.slsModifiers == null
+                        ? null : new Dictionary<string, SlsModifierType>(horde.slsModifiers);
                 }
+            }
+        }
+
+        private static void ApplyOverride(HoardConfig horde, SpawnSettingsOverride settings)
+        {
+            if (settings == null) { return; }
+            if (settings.minimumStars.HasValue) { horde.minimumStars = settings.minimumStars.Value; }
+            if (settings.maximumStars.HasValue) { horde.maximumStars = settings.maximumStars.Value; }
+            // An explicit empty map clears inherited requirements; null/omitted inherits.
+            if (settings.slsModifiers != null) { horde.slsModifiers = settings.slsModifiers; }
+        }
+
+        private static void NormalizeStars(HoardConfig horde)
+        {
+            if (horde.minimumStars < 0)
+            {
+                Jotunn.Logger.LogWarning($"minimumStars {horde.minimumStars} is negative; using 0.");
+                horde.minimumStars = 0;
+            }
+            if (horde.maximumStars < 0)
+            {
+                Jotunn.Logger.LogWarning($"maximumStars {horde.maximumStars} is negative; using 0.");
+                horde.maximumStars = 0;
+            }
+            if (horde.maximumStars.HasValue && horde.minimumStars > horde.maximumStars.Value)
+            {
+                Jotunn.Logger.LogWarning($"minimumStars {horde.minimumStars} exceeds maximumStars {horde.maximumStars}; using {horde.maximumStars} for both.");
+                horde.minimumStars = horde.maximumStars.Value;
             }
         }
 
