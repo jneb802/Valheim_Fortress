@@ -1,4 +1,10 @@
 
+  **0.38.0 (fork, unreleased)**
+---
+- Add minimum stars and guaranteed SLS modifiers to wild, Challenge, and Arena events.
+- Preserve event creature settings in serialized wave phases.
+- Support .NET SDK builds on macOS with current Valheim game references.
+
   **0.36.2**
 ---
 ```

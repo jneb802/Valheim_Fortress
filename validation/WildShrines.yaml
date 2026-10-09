@@ -1,0 +1,29 @@
+wildShrines:
+- definitionForWildShrine: VF_wild_shrine_green1
+  wildShrineNameLocalization: Fortress validation shrine
+  wildShrineRequestLocalization: Offer one boar trophy
+  shrineUnacceptedTributeLocalization: Offer a boar trophy
+  shrineLargerTributeRequiredLocalization: One trophy is required
+  wildShrineLevelsConfig:
+  - tributeName: TrophyBoar
+    tributeAmount: 1
+    rewards:
+      Coins: 100
+    hardMode: false
+    siegeMode: false
+    wildshrineWaveStartLocalization: Fortress validation started
+    wildshrineWaveEndLocalization: Fortress validation finished
+    wildLevelDefinition:
+      levelIndex: 1
+      minimumStars: 3
+      slsModifiers:
+        Fire: Major
+        Fast: Minor
+      biome: Meadows
+      waveFormat: CommonOnly
+      maxCreaturesPerPhaseOverride: 12
+      onlySelectMonsters:
+      - Neck
+      commonSpawnModifiers: {}
+      rareSpawnModifiers: {}
+      eliteSpawnModifiers: {}

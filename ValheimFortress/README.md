@@ -1,4 +1,10 @@
 # ValheimFortress
+## Custom shrine stars and SLS modifiers
+
+Events can now set `minimumStars` and `slsModifiers`. See the
+[configuration guide](../docs/shrine-creature-settings.md) for YAML examples,
+defaults, and SLS requirements.
+
 ---
 ## What is Valheim Fortress
 When the Valheim Devs released the blog ["Fearsome Foes!"](https://www.valheimgame.com/news/development-blog-fearsome-foes) they talked about a concept called "Fortress Time!".

@@ -1,4 +1,9 @@
 # ValheimFortress
+
+This fork supports event-specific `minimumStars` and `slsModifiers`.
+See [the configuration guide](docs/shrine-creature-settings.md) and
+[macOS build instructions](BUILDING.md).
+
 ---
 ## What is Valheim Fortress
 When the Valheim Devs released the blog ["Fearsome Foes!"](https://www.valheimgame.com/news/development-blog-fearsome-foes) they talked about a concept called "Fortress Time!".
