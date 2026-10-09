@@ -35,24 +35,28 @@ namespace ValheimFortress.Challenge
                     horde.minimumStars = level.minimumStars;
                     horde.maximumStars = level.maximumStars;
                     horde.slsModifiers = level.slsModifiers;
+                    ApplyCreatureOverrides(horde, level.creatureOverrides);
                     ApplyOverride(horde, waveSettings);
-                    if (waveSettings?.creatureOverrides != null)
-                    {
-                        // Matching rules apply in YAML list order; later fields take priority.
-                        foreach (CreatureSpawnSettingsOverride rule in waveSettings.creatureOverrides)
-                        {
-                            if (rule?.creatures != null &&
-                                (rule.creatures.Contains(horde.creature) || rule.creatures.Contains(horde.prefab)))
-                            {
-                                ApplyOverride(horde, rule);
-                            }
-                        }
-                    }
+                    ApplyCreatureOverrides(horde, waveSettings?.creatureOverrides);
                     NormalizeStars(horde);
                     // Serialize the resolved settings, not the rules, so reloads and spawning
                     // peers receive the same result without needing to resolve the config again.
                     horde.slsModifiers = horde.slsModifiers == null
                         ? null : new Dictionary<string, SlsModifierType>(horde.slsModifiers);
+                }
+            }
+        }
+
+        private static void ApplyCreatureOverrides(HoardConfig horde, List<CreatureSpawnSettingsOverride> rules)
+        {
+            if (rules == null) { return; }
+            // Matching rules apply in YAML list order; later fields take priority.
+            foreach (CreatureSpawnSettingsOverride rule in rules)
+            {
+                if (rule?.creatures != null &&
+                    (rule.creatures.Contains(horde.creature) || rule.creatures.Contains(horde.prefab)))
+                {
+                    ApplyOverride(horde, rule);
                 }
             }
         }
