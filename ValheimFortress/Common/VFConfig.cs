@@ -216,6 +216,7 @@ namespace ValheimFortress
 # levels:
 # - levelIndex: 1                                                  |- LevelIndex is the difficulty this wave is set at, valid values are 1+
 #   minimumStars: 0                                               |- Minimum stars for all phases, 0 or higher; overrides a lower global star cap
+#   maximumStars:                                                |- Optional maximum stars; omit for no event cap, 0 forces zero stars; takes priority over minimumStars
 #   slsModifiers: {}                                              |- Optional SLS name-to-type map, for example {Fire: Major, Fast: Minor}
 #   numPhases: 4                                                   |- The number of phases in this level, enemies will be distributed among the phases
 #   levelForShrineTypes:                                           |- What shrines will host this level, multiple definitions can be applied
@@ -308,6 +309,7 @@ namespace ValheimFortress
 #     wildLevelDefinition:
 #       levelIndex: 2                                                 |- The difficulty level for this wave, valid values are 1+ (Refer to the readme for a breakdown of this equation)
 #       minimumStars: 3                                               |- Minimum stars for every creature, 0 or higher; overrides the global star cap when higher
+#       maximumStars: 5                                               |- Optional maximum stars; omit for no event cap, 0 forces zero stars; takes priority over minimumStars
 #       slsModifiers:                                                 |- Optional guaranteed SLS modifiers, added to its normal random modifiers
 #         Fire: Major                                                 |- Requires SLS with spawn-management API support (tested with 1.23.1)
 #         Fast: Minor
