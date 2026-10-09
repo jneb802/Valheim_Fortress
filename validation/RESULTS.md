@@ -33,6 +33,12 @@ Two earlier test-helper failures were corrected before the passing run: wild
 shrines must be spawned through the location system, and the helper must access
 `ZNetView` through `GetComponent` instead of a private game field.
 
+Cleanup cancelled the test run and removed its shrine. All 656 original profile
+files and the profile registry entry were restored and verified. The restored
+profile reached the main menu with Fortress 0.37.2 through `mmcli start`. Files
+rewritten by that startup check were restored again. The previous active profile
+was selected, and temporary backups were removed after verification.
+
 ## Limits
 
 - This is single-client local-world proof with the production mod set. Dedicated
