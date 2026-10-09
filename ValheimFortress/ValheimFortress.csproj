@@ -1,212 +1,35 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{DEAF4438-8089-40ED-8175-398E1261D45B}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <RootNamespace>ValheimFortress</RootNamespace>
     <AssemblyName>ValheimFortress</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <Deterministic>true</Deterministic>
-    <NuGetPackageImportStamp>
-    </NuGetPackageImportStamp>
-    <TargetFrameworkProfile />
+    <VALHEIM_INSTALL Condition="'$(VALHEIM_INSTALL)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">$(HOME)/Library/Application Support/Steam/steamapps/common/Valheim</VALHEIM_INSTALL>
+    <VALHEIM_INSTALL Condition="'$(VALHEIM_INSTALL)' == '' and '$(OS)' == 'Windows_NT'">C:/Program Files (x86)/Steam/steamapps/common/Valheim</VALHEIM_INSTALL>
+    <VALHEIM_INSTALL Condition="'$(VALHEIM_INSTALL)' == ''">$(HOME)/.steam/steam/steamapps/common/Valheim</VALHEIM_INSTALL>
+    <VALHEIM_MANAGED Condition="'$(VALHEIM_MANAGED)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">$(VALHEIM_INSTALL)/Valheim.app/Contents/Resources/Data/Managed</VALHEIM_MANAGED>
+    <VALHEIM_MANAGED Condition="'$(VALHEIM_MANAGED)' == ''">$(VALHEIM_INSTALL)/valheim_Data/Managed</VALHEIM_MANAGED>
+    <PUBLICIZED_PATH Condition="'$(PUBLICIZED_PATH)' == ''">$(VALHEIM_MANAGED)/publicized_assemblies</PUBLICIZED_PATH>
+    <BEPINEX_CORE Condition="'$(BEPINEX_CORE)' == ''">$(VALHEIM_INSTALL)/BepInEx/core</BEPINEX_CORE>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>
-    </DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
-    <StartAction>Program</StartAction>
-    <StartProgram>$(VALHEIM_INSTALL)\valheim.exe</StartProgram>
-    <StartArguments>-console</StartArguments>
-    <StartWorkingDirectory>$(VALHEIM_INSTALL)</StartWorkingDirectory>
-  </PropertyGroup>
+  <Import Project="Environment.props" Condition="Exists('Environment.props')" />
   <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Runtime.Serialization" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Xml" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="HarmonyX" Version="2.10.2" />
+    <PackageReference Include="JotunnLib" Version="2.26.1" ExcludeAssets="build;buildTransitive" />
+    <PackageReference Include="Mono.Cecil" Version="0.11.5" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    <Reference Include="BepInEx" HintPath="$(BEPINEX_CORE)/BepInEx.dll" Private="false" />
+    <Reference Include="$(VALHEIM_MANAGED)/UnityEngine*.dll" Private="false" />
+    <Reference Include="$(VALHEIM_MANAGED)/Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="$(PUBLICIZED_PATH)/*_publicized.dll" Private="false" />
+    <EmbeddedResource Include="AssetsEmbedded/vfbundle" />
+    <EmbeddedResource Include="Localizations/*.json" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Include="API\API.cs" />
-    <Compile Include="Common\APIReceiver.cs" />
-    <Compile Include="Challenge\ArenaShrine.cs" />
-    <Compile Include="Challenge\ArenaShrineUI.cs" />
-    <Compile Include="Challenge\ChallengeShrine.cs" />
-    <Compile Include="Challenge\ChallengeShrineUI.cs" />
-    <Compile Include="Challenge\ExternalShrine.cs" />
-    <Compile Include="Challenge\Patches.cs" />
-    <Compile Include="Common\DataObjects.cs" />
-    <Compile Include="Challenge\GenericShrine.cs" />
-    <Compile Include="Challenge\GenericShrineUI.cs" />
-    <Compile Include="Challenge\Levels.cs" />
-    <Compile Include="Challenge\PortalTracker.cs" />
-    <Compile Include="Challenge\RemoteLocationPortals.cs" />
-    <Compile Include="Challenge\Rewards.cs" />
-    <Compile Include="Challenge\RewardsData.cs" />
-    <Compile Include="Challenge\Spawner.cs" />
-    <Compile Include="Challenge\UserInterfaceData.cs" />
-    <Compile Include="Challenge\WildShrine.cs" />
-    <Compile Include="Common\JotunnPieceLoader.cs" />
-    <Compile Include="Common\Logger.cs" />
-    <Compile Include="Common\PieceDefinition.cs" />
-    <Compile Include="Data\ChallengeLevels.cs" />
-    <Compile Include="Data\Monsters.cs" />
-    <Compile Include="Data\WildShrineData.cs" />
-    <Compile Include="Common\Compression.cs" />
-    <Compile Include="Data\WaveStyles.cs" />
-    <Compile Include="Defenses\BallistaOnChange.cs" />
-    <Compile Include="Defenses\VFTurret.cs" />
-    <Compile Include="ValheimPiece.cs" />
-    <Compile Include="Properties\IgnoreAccessModifiers.cs" />
-    <Compile Include="ValheimFortress.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Common\VFConfig.cs" />
-    <Compile Include="VFLocations.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="app.config" />
-    <EmbeddedResource Include="AssetsEmbedded\vfbundle" />
-    <EmbeddedResource Include="Localizations\English.json" />
-    <EmbeddedResource Include="Localizations\Spanish.json" />
-    <None Include="Package\CHANGELOG.md" />
-    <EmbeddedResource Include="Localizations\Abenaki.json" />
-    <EmbeddedResource Include="Localizations\Bulgarian.json" />
-    <EmbeddedResource Include="Localizations\Chinese.json" />
-    <EmbeddedResource Include="Localizations\Chinese_Trad.json" />
-    <EmbeddedResource Include="Localizations\Croatian.json" />
-    <EmbeddedResource Include="Localizations\Czech.json" />
-    <EmbeddedResource Include="Localizations\Danish.json" />
-    <EmbeddedResource Include="Localizations\Dutch.json" />
-    <EmbeddedResource Include="Localizations\Finnish.json" />
-    <EmbeddedResource Include="Localizations\French.json" />
-    <EmbeddedResource Include="Localizations\Georgian.json" />
-    <EmbeddedResource Include="Localizations\German.json" />
-    <EmbeddedResource Include="Localizations\Greek.json" />
-    <EmbeddedResource Include="Localizations\Hindi.json" />
-    <EmbeddedResource Include="Localizations\Hungarian.json" />
-    <EmbeddedResource Include="Localizations\Icelandic.json" />
-    <EmbeddedResource Include="Localizations\Italian.json" />
-    <EmbeddedResource Include="Localizations\Japanese.json" />
-    <EmbeddedResource Include="Localizations\Korean.json" />
-    <EmbeddedResource Include="Localizations\Latvian.json" />
-    <EmbeddedResource Include="Localizations\Lithuanian.json" />
-    <EmbeddedResource Include="Localizations\Macedonian.json" />
-    <EmbeddedResource Include="Localizations\Norwegian.json" />
-    <EmbeddedResource Include="Localizations\Polish.json" />
-    <EmbeddedResource Include="Localizations\Portuguese_Brazilian.json" />
-    <EmbeddedResource Include="Localizations\Portuguese_European.json" />
-    <EmbeddedResource Include="Localizations\Romanian.json" />
-    <EmbeddedResource Include="Localizations\Russian.json" />
-    <EmbeddedResource Include="Localizations\Serbian.json" />
-    <EmbeddedResource Include="Localizations\Slovak.json" />
-    <EmbeddedResource Include="Localizations\Swedish.json" />
-    <EmbeddedResource Include="Localizations\Thai.json" />
-    <EmbeddedResource Include="Localizations\Turkish.json" />
-    <EmbeddedResource Include="Localizations\Ukrainian.json" />
-    <None Include="README.md" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="HarmonyX">
-      <Version>2.10.2</Version>
-    </PackageReference>
-    <PackageReference Include="JotunnLib">
-      <Version>2.26.1</Version>
-    </PackageReference>
-    <PackageReference Include="Mono.Cecil">
-      <Version>0.11.5</Version>
-    </PackageReference>
-    <PackageReference Include="YamlDotNet">
-      <Version>16.3.0</Version>
-    </PackageReference>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="DoPrebuild.props" />
-    <None Include="Environment.props" />
-  </ItemGroup>
-  <ItemGroup>
-    <WCFMetadata Include="Connected Services\" />
-  </ItemGroup>
-  <ItemGroup />
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <BuildDependsOn>
-      $(BuildDependsOn);
-    </BuildDependsOn>
-  </PropertyGroup>
-  <PropertyGroup>
-    <PostBuildEvent>xcopy "$(ProjectDir)\README.md" "$(ProjectDir)\Package\README.md" /q /y /i
-</PostBuildEvent>
-  </PropertyGroup>
-  <PropertyGroup>
-    <PreBuildEvent>xcopy "C:\Users\carls\Documents\projects\Valheim_Stuff\Unity_Valheim_mod_data\JotunnModUnity\AssetBundles\StandaloneWindows\vfbundle" "$(ProjectDir)\AssetsEmbedded\vfbundle" /q /y /i
-
-</PreBuildEvent>
-  </PropertyGroup>
-  <!-- BEGIN mod-tools (managed block; replaced by `mod-tools setup`) -->
-  <PropertyGroup>
-    <RepoRoot Condition=" '$(RepoRoot)' == '' ">$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../'))</RepoRoot>
-    <!-- Override in the gitignored Environment.props when the gem's bindir
-         is not on the PATH that MSBuild sees. -->
-    <ModTools Condition=" '$(ModTools)' == '' ">mod-tools</ModTools>
-  </PropertyGroup>
-
-  <!-- Nothing is vendored into this repo, so a machine that never installed
-       the tools has no mod-tools at all. This probes for it once and warns,
-       rather than failing: not having a release tool should not stop anyone
-       compiling. Everything below is then conditioned on the result, so a
-       machine without it skips those steps instead of failing three times
-       over with "command not found" buried in Exec output. -->
-  <Target Name="ModToolsGuard" BeforeTargets="Build">
-    <Exec Command="$(ModTools) preflight --root &quot;$(RepoRoot).&quot;" ContinueOnError="true" IgnoreExitCode="true" StandardOutputImportance="low">
-      <Output TaskParameter="ExitCode" PropertyName="ModToolsExit" />
-    </Exec>
-    <PropertyGroup>
-      <ModToolsAvailable Condition=" '$(ModToolsExit)' == '0' ">true</ModToolsAvailable>
-    </PropertyGroup>
-    <Warning Condition=" '$(ModToolsAvailable)' != 'true' " Text="mod-tools is not installed on this machine, or this repo is not set up. Skipping release checks, packaging and deploy. Install it with `rake install` from a clone of the tools repo; see its SETUP.md." />
+  <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(PUBLICIZED_PATH)/assembly_valheim_publicized.dll')" Text="Set PUBLICIZED_PATH to the publicized assemblies for your Valheim installation. See BUILDING.md." />
+    <Error Condition="!Exists('$(BEPINEX_CORE)/BepInEx.dll')" Text="Set BEPINEX_CORE to your BepInEx core directory. See BUILDING.md." />
   </Target>
-
-  <Target Name="ReleaseChecks" BeforeTargets="Build" Condition=" '$(ModToolsAvailable)' == 'true' AND '$(Configuration)' == 'Release' ">
-    <Exec Command="$(ModTools) check --root &quot;$(RepoRoot).&quot;" />
-  </Target>
-
-  <Target Name="ReleasePackage" AfterTargets="Build" Condition=" '$(ModToolsAvailable)' == 'true' AND '$(Configuration)' == 'Release' ">
-    <Exec Command="$(ModTools) package --root &quot;$(RepoRoot).&quot;" />
-  </Target>
-
-  <!-- No Configuration condition, unlike the two above: every build lands
-       in the test profiles, Debug and Release alike. Declared last so it
-       runs after a GenerateMdb target defined earlier in this file, whose
-       .mdb it copies. Does nothing unless release.yml enables deploy. -->
-  <Target Name="ModToolsDeploy" AfterTargets="Build" Condition=" '$(ModToolsAvailable)' == 'true' ">
-    <Exec Command="$(ModTools) deploy --root &quot;$(RepoRoot).&quot; --configuration $(Configuration)" />
-  </Target>
-  <!-- END mod-tools -->
 </Project>

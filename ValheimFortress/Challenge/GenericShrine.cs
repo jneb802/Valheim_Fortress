@@ -629,6 +629,8 @@ namespace ValheimFortress.Challenge
 
         public abstract void Update();
 
+        public float GetHoverOffset() { return 0f; }
+
         public abstract string GetHoverText();
 
         public abstract string GetHoverName();

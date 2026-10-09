@@ -389,6 +389,8 @@ namespace ValheimFortress.Defenses
 			return (double)(m_nview.GetZDO().GetFloat("lastAttack") + m_attackCooldown) > ZNet.instance.GetTimeSeconds();
 		}
 
+		public float GetHoverOffset() { return 0f; }
+
 		public string GetHoverText()
 		{
 			if (!m_nview.IsValid())
