@@ -29,7 +29,7 @@
     <EmbeddedResource Include="Localizations/*.json" />
   </ItemGroup>
   <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
-    <Error Condition="!Exists('$(PUBLICIZED_PATH)/assembly_valheim_publicized.dll')" Text="Set PUBLICIZED_PATH to the publicized assemblies for your Valheim installation. See BUILDING.md." />
-    <Error Condition="!Exists('$(BEPINEX_CORE)/BepInEx.dll')" Text="Set BEPINEX_CORE to your BepInEx core directory. See BUILDING.md." />
+    <Error Condition="!Exists('$(PUBLICIZED_PATH)/assembly_valheim_publicized.dll')" Text="Set PUBLICIZED_PATH to the publicized assemblies for your Valheim installation." />
+    <Error Condition="!Exists('$(BEPINEX_CORE)/BepInEx.dll')" Text="Set BEPINEX_CORE to your BepInEx core directory." />
   </Target>
 </Project>
