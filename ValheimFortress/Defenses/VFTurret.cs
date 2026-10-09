@@ -389,8 +389,6 @@ namespace ValheimFortress.Defenses
 			return (double)(m_nview.GetZDO().GetFloat("lastAttack") + m_attackCooldown) > ZNet.instance.GetTimeSeconds();
 		}
 
-		public float GetHoverOffset() { return 0f; }
-
 		public string GetHoverText()
 		{
 			if (!m_nview.IsValid())
@@ -493,5 +491,13 @@ namespace ValheimFortress.Defenses
 				areaMarker.gameObject.SetActive(false);
 			}
 		}
-	}
+
+        public float GetHoverOffset() {
+            // Hoverable gained this member in the Sept 2026 game update. Every vanilla implementer
+            // returns a serialized m_hoverOffset; zero keeps the turret's hover text where it has
+            // always been. Throwing here would take out Player.UpdateHover the moment anyone looked
+            // at a turret.
+            return 0f;
+        }
+    }
 }

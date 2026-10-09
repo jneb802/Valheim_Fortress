@@ -629,8 +629,6 @@ namespace ValheimFortress.Challenge
 
         public abstract void Update();
 
-        public float GetHoverOffset() { return 0f; }
-
         public abstract string GetHoverText();
 
         public abstract string GetHoverName();
@@ -648,7 +646,7 @@ namespace ValheimFortress.Challenge
             boss_mode.ForceSet(false);
             hard_mode.ForceSet(false);
             siege_mode.ForceSet(false);
-            // Authoritatively remove any still-living challenge creatures (ForceSet above guarantees we own
+            // Authoritively remove any still-living challenge creatures (ForceSet above guarantees we own
             // the shrine ZDO at this point). Replaces the old per-creature, owner-gated CreatureTracker cleanup.
             DestroyAllSpawnedCreatures();
             Disableportal();
@@ -776,6 +774,14 @@ namespace ValheimFortress.Challenge
             {
                 return 1f;
             }
+        }
+
+        public float GetHoverOffset() {
+            // Hoverable gained this member in the Sept 2026 game update. Every vanilla implementer
+            // returns a serialized m_hoverOffset; zero keeps the shrine's hover text where it has
+            // always been. Throwing here would take out Player.UpdateHover the moment anyone looked
+            // at a shrine.
+            return 0f;
         }
     }
 }

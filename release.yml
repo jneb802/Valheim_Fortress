@@ -7,13 +7,16 @@
 extends:  jotunn
 assembly: ValheimFortress
 
-# Copy the build into this machine's mod manager profiles after every
-# build. Destinations live in ~/.config/mod-tools/config.yml,
-# because they differ per machine.
 deploy:
   enabled: true
 
 publish:
+  github:
+    enabled: true
+
+  discord:
+    enabled: true
+
   thunderstore:
     enabled: true
     author_name: MidnightMods          # the Thunderstore TEAM, not your username

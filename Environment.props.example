@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copy to Environment.props (gitignored) to override what Directory.Build.props probes for.
+  Every property here is optional - drop the ones you do not need.
+-->
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <!-- Base Valheim folder. Probed from the Steam registry keys and the usual
+         Program Files locations; set it for a non-Steam or second install. -->
+    <VALHEIM_INSTALL>C:\Program Files (x86)\Steam\steamapps\common\Valheim</VALHEIM_INSTALL>
+
+    <!-- Mod-manager profile to compile against, so the BepInEx/Harmony/MonoMod on the
+         reference list match what the mod is loaded next to at runtime. Defaults to the
+         profile the build deploys into; looked up under Gale, r2modman and Thunderstore MM. -->
+    <!-- <VALHEIM_PROFILE>Modtest</VALHEIM_PROFILE> -->
+
+    <!-- Folder holding core/BepInEx.dll. Normally derived from VALHEIM_PROFILE above, falling
+         back to $(VALHEIM_INSTALL)\BepInEx and then to the first profile that has one. Set it
+         to pin a path the profile lookup cannot reach. -->
+    <!-- <BEPINEX_PATH>$(AppData)\com.kesomannen.gale\valheim\profiles\Modtest\BepInEx</BEPINEX_PATH> -->
+
+    <!-- Set to false to skip publicizing and reuse whatever is already in
+         <Valheim>/valheim_Data/Managed/publicized_assemblies. -->
+    <!-- <ExecutePrebuild>false</ExecutePrebuild> -->
+  </PropertyGroup>
+</Project>

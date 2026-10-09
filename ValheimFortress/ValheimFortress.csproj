@@ -12,7 +12,7 @@
     <VALHEIM_MANAGED Condition="'$(VALHEIM_MANAGED)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">$(VALHEIM_INSTALL)/Valheim.app/Contents/Resources/Data/Managed</VALHEIM_MANAGED>
     <VALHEIM_MANAGED Condition="'$(VALHEIM_MANAGED)' == ''">$(VALHEIM_INSTALL)/valheim_Data/Managed</VALHEIM_MANAGED>
     <PUBLICIZED_PATH Condition="'$(PUBLICIZED_PATH)' == ''">$(VALHEIM_MANAGED)/publicized_assemblies</PUBLICIZED_PATH>
-    <BEPINEX_CORE Condition="'$(BEPINEX_CORE)' == ''">$(VALHEIM_INSTALL)/BepInEx/core</BEPINEX_CORE>
+    <BEPINEX_CORE Condition="'$(BEPINEX_CORE)' == ''">$(BEPINEX_PATH)/core</BEPINEX_CORE>
   </PropertyGroup>
   <Import Project="Environment.props" Condition="Exists('Environment.props')" />
   <ItemGroup>
